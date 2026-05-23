@@ -1,0 +1,130 @@
+import os
+import logging
+from datetime import datetime
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
+
+BOT_TOKEN = os.environ.get("8971350855:AAGPij0fQoVi3p734TOwxGyX8QTaYtFtTXg")
+ADMIN_ID = 6829520371
+ADMIN_USERNAME = "@Skuy"
+JAM_BUKA = 8
+JAM_TUTUP = 21
+NAMA_TOKO = "NoxStore 🛒"
+
+PRODUK = {
+    "capcut": {"nama": "CapCut Pro", "emoji": "🎬", "harga": {"1 Bulan": "Rp 15.000", "3 Bulan": "Rp 40.000", "1 Tahun": "Rp 130.000"}, "deskripsi": "Akses semua fitur premium CapCut, tanpa watermark, dan efek pro."},
+    "canva": {"nama": "Canva Pro", "emoji": "🎨", "harga": {"1 Bulan": "Rp 20.000", "3 Bulan": "Rp 55.000", "1 Tahun": "Rp 180.000"}, "deskripsi": "Template premium, background remover, brand kit, storage unlimited."},
+    "spotify": {"nama": "Spotify Premium", "emoji": "🎵", "harga": {"1 Bulan": "Rp 18.000", "3 Bulan": "Rp 50.000", "1 Tahun": "Rp 170.000"}, "deskripsi": "Musik tanpa iklan, download offline, kualitas audio tinggi."},
+    "youtube": {"nama": "YouTube Premium", "emoji": "▶️", "harga": {"1 Bulan": "Rp 20.000", "3 Bulan": "Rp 55.000", "1 Tahun": "Rp 190.000"}, "deskripsi": "Nonton tanpa iklan, download video, YouTube Music Premium."},
+}
+
+FAQ = [
+    ("Apakah akun aman?", "✅ Aman! Metode family/sharing, tidak mempengaruhi akun utama."),
+    ("Berapa lama aktivasi?", "⚡ Maksimal 1x24 jam setelah pembayaran konfirmasi."),
+    ("Cara bayar?", "💳 Transfer Bank, GoPay, OVO, Dana, QRIS."),
+    ("Ada masalah gimana?", "🛡️ Ada garansi! Hubungi admin dan akan kami tangani."),
+    ("Bisa request produk lain?", "📦 Bisa! Hubungi admin kami."),
+]
+
+logging.basicConfig(level=logging.INFO)
+
+def jam_kerja():
+    return JAM_BUKA <= datetime.now().hour < JAM_TUTUP
+
+def pesan_tutup():
+    return f"🌙 *Toko sedang tutup*\n\nJam operasional: {JAM_BUKA:02d}.00 - {JAM_TUTUP:02d}.00 WIB\n\nPesan kamu sudah kami catat! 😊"
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    keyboard = [
+        [InlineKeyboardButton("🛒 Lihat Produk", callback_data="menu_produk")],
+        [InlineKeyboardButton("❓ FAQ", callback_data="menu_faq"), InlineKeyboardButton("📞 Hubungi Admin", callback_data="menu_admin")],
+        [InlineKeyboardButton("🔥 Cara Order", callback_data="menu_order")],
+    ]
+    await update.message.reply_text(f"Halo *{user.first_name}* 👋\n\nSelamat datang di *{NAMA_TOKO}*!\nLangganan premium harga terjangkau & bergaransi 🔥\n\nPilih menu:", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def menu_produk(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    keyboard = [[InlineKeyboardButton(f"{p['emoji']} {p['nama']}", callback_data=f"produk_{k}")] for k, p in PRODUK.items()]
+    keyboard.append([InlineKeyboardButton("🔙 Kembali", callback_data="menu_utama")])
+    await query.edit_message_text("🛒 *Pilih produk:*", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def detail_produk(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    key = query.data.replace("produk_", "")
+    p = PRODUK.get(key)
+    harga_text = "\n".join([f"  • {d}: *{h}*" for d, h in p['harga'].items()])
+    keyboard = [[InlineKeyboardButton(f"✅ Order {p['nama']}", callback_data=f"order_{key}")], [InlineKeyboardButton("🔙 Kembali", callback_data="menu_produk")]]
+    await query.edit_message_text(f"{p['emoji']} *{p['nama']}*\n\n_{p['deskripsi']}_\n\n💰 *Harga:*\n{harga_text}", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def order_produk(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    key = query.data.replace("order_", "")
+    p = PRODUK.get(key)
+    user = query.from_user
+    if not jam_kerja():
+        await query.edit_message_text(pesan_tutup(), parse_mode="Markdown")
+        await context.bot.send_message(ADMIN_ID, f"📬 Order luar jam kerja!\n👤 {user.full_name} (@{user.username})\n📦 {p['nama']}")
+        return
+    await context.bot.send_message(ADMIN_ID, f"🔔 *ORDER BARU!*\n\n👤 {user.full_name}\n🆔 @{user.username}\n📦 {p['emoji']} {p['nama']}", parse_mode="Markdown")
+    keyboard = [[InlineKeyboardButton("🔙 Menu Utama", callback_data="menu_utama")]]
+    await query.edit_message_text(f"✅ *Order {p['nama']} diterima!*\n\nAdmin akan segera menghubungi kamu 🙏", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def menu_faq(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    faq_text = "".join([f"*{i}. {p}*\n{j}\n\n" for i, (p, j) in enumerate(FAQ, 1)])
+    keyboard = [[InlineKeyboardButton("🔙 Kembali", callback_data="menu_utama")]]
+    await query.edit_message_text(f"❓ *FAQ*\n\n{faq_text}", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def menu_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    keyboard = [[InlineKeyboardButton("🔙 Kembali", callback_data="menu_utama")]]
+    await query.edit_message_text(f"📞 *Hubungi Admin*\n\n👤 {ADMIN_USERNAME}\n\nJam: {JAM_BUKA:02d}.00 - {JAM_TUTUP:02d}.00 WIB", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def menu_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    keyboard = [[InlineKeyboardButton("🛒 Order Sekarang", callback_data="menu_produk")], [InlineKeyboardButton("🔙 Kembali", callback_data="menu_utama")]]
+    await query.edit_message_text("🔥 *Cara Order:*\n\n1️⃣ Pilih produk\n2️⃣ Tap Order\n3️⃣ Admin hubungi kamu\n4️⃣ Bayar\n5️⃣ Akun aktif! ⚡", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def menu_utama(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    keyboard = [
+        [InlineKeyboardButton("🛒 Lihat Produk", callback_data="menu_produk")],
+        [InlineKeyboardButton("❓ FAQ", callback_data="menu_faq"), InlineKeyboardButton("📞 Hubungi Admin", callback_data="menu_admin")],
+        [InlineKeyboardButton("🔥 Cara Order", callback_data="menu_order")],
+    ]
+    await query.edit_message_text(f"🏠 *{NAMA_TOKO}*\n\nPilih menu:", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def pesan_masuk(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    pesan = update.message.text
+    if not jam_kerja():
+        await update.message.reply_text(pesan_tutup(), parse_mode="Markdown")
+        await context.bot.send_message(ADMIN_ID, f"💬 *Pesan luar jam kerja*\n\n👤 {user.full_name}\n📝 {pesan}", parse_mode="Markdown")
+    else:
+        keyboard = [[InlineKeyboardButton("🛒 Lihat Menu", callback_data="menu_produk")]]
+        await update.message.reply_text("Halo! Ketik /start untuk menu lengkap 😊", reply_markup=InlineKeyboardMarkup(keyboard))
+        await context.bot.send_message(ADMIN_ID, f"💬 *Pesan masuk*\n\n👤 {user.full_name}\n📝 {pesan}", parse_mode="Markdown")
+
+def main():
+    app = Application.builder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(menu_produk, pattern="^menu_produk$"))
+    app.add_handler(CallbackQueryHandler(menu_faq, pattern="^menu_faq$"))
+    app.add_handler(CallbackQueryHandler(menu_admin, pattern="^menu_admin$"))
+    app.add_handler(CallbackQueryHandler(menu_order, pattern="^menu_order$"))
+    app.add_handler(CallbackQueryHandler(menu_utama, pattern="^menu_utama$"))
+    app.add_handler(CallbackQueryHandler(detail_produk, pattern="^produk_"))
+    app.add_handler(CallbackQueryHandler(order_produk, pattern="^order_"))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, pesan_masuk))
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
