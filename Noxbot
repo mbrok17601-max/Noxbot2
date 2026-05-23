@@ -4,7 +4,7 @@ from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
-BOT_TOKEN = os.environ.get("8971350855:AAGPij0fQoVi3p734TOwxGyX8QTaYtFtTXg")
+BOT_TOKEN = os.environ.get("8971350855:AAHvzRcW_Zv5fEN7MrztKopUVSfVYhp8Gm4")
 ADMIN_ID = 6829520371
 ADMIN_USERNAME = "@Skuy"
 JAM_BUKA = 8
